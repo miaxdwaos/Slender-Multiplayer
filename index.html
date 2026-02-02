@@ -51,6 +51,10 @@
     const chatMessages = document.getElementById('chat-messages');
     const chatInput = document.getElementById('chat-input');
     
+    // --- CARGA DE ASSETS ---
+    const playerSpriteImg = new Image();
+    playerSpriteImg.src = 'PersonSpriteheh.png'; // Asegúrate de que el archivo esté en la misma carpeta
+
     let worldMap = [
         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
         [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -74,30 +78,20 @@
     let gameStarted = false, notesCollected = 0, isDead = false, maxNotes = 0;
     
     function getPlayerName(id) {
-        if (!id) return "???";
-        let short = id.substring(0, 4);
-        let count = 0;
-        let index = 1;
-        const allIds = Object.keys(players).sort();
-        for (let pId of allIds) {
-            if (pId.substring(0, 4) === short) {
-                if (pId === id) index = count + 1;
-                count++;
-            }
-        }
-        return count > 1 ? `${short}(${index})` : short;
+        if (!id) return "????";
+        return id.toString().substring(0, 4); // Solo los 4 dígitos iniciales
     }
 
     peer.on('open', id => {
         myId = id;
         document.getElementById('my-id').innerText = id;
-        players[id] = { x: 1.5, y: 1.5, color: '#3498db', isDead: false };
+        players[id] = { x: 1.5, y: 1.5, isDead: false, id: id };
     });
 
     peer.on('connection', conn => {
         conn.on('open', () => {
             connections[conn.peer] = conn;
-            players[conn.peer] = { x: 1.5, y: 1.5, color: '#e67e22', isDead: false };
+            players[conn.peer] = { x: 1.5, y: 1.5, isDead: false, id: conn.peer };
             addChatMessage("Sistema", `${getPlayerName(conn.peer)} se unió.`);
             updateLobbyUI();
             syncToAll();
@@ -230,7 +224,6 @@
     function handleMovement() {
         if(!gameStarted || isDead) return;
         
-        // GIRO IZQUIERDA: Flecha Izquierda o tecla A
         if (keys['ArrowRight'] || keys['KeyD']) {
             let oldDirX = dirX;
             dirX = dirX * Math.cos(rotSpeed) - dirY * Math.sin(rotSpeed);
@@ -240,7 +233,6 @@
             planeY = oldPlaneX * Math.sin(rotSpeed) + planeY * Math.cos(rotSpeed);
         }
         
-        // GIRO DERECHA: Flecha Derecha o tecla D
         if (keys['ArrowLeft'] || keys['KeyA']) {
             let oldDirX = dirX;
             dirX = dirX * Math.cos(-rotSpeed) - dirY * Math.sin(-rotSpeed);
@@ -250,7 +242,6 @@
             planeY = oldPlaneX * Math.sin(-rotSpeed) + planeY * Math.cos(-rotSpeed);
         }
 
-        // AVANZAR/RETROCEDER: Flechas Arriba/Abajo o teclas W/S
         let moveX = (keys['ArrowUp'] || keys['KeyW'] ? 1 : (keys['ArrowDown'] || keys['KeyS'] ? -1 : 0));
         let targetX = posX + dirX * moveSpeed * moveX;
         let targetY = posY + dirY * moveSpeed * moveX;
@@ -325,20 +316,42 @@
         }
 
         let sprites = [];
-        if(slenderman.active) sprites.push({...slenderman, color:"#111", sX:0.5, sY:1.8});
-        for(let id in players) if(id !== myId && !players[id].isDead) sprites.push({...players[id], sX:0.4, sY:0.6});
+        if(slenderman.active) sprites.push({...slenderman, isSlender: true, sX:0.5, sY:1.8});
+        for(let id in players) {
+            if(id !== myId && !players[id].isDead) {
+                sprites.push({...players[id], isSlender: false, sX:0.6, sY:0.8});
+            }
+        }
         
         sprites.sort((a,b) => Math.hypot(posX-b.x, posY-b.y) - Math.hypot(posX-a.x, posY-a.y));
         sprites.forEach(s => {
             let relX = s.x - posX, relY = s.y - posY;
             let invDet = 1.0 / (planeX * dirY - dirX * planeY);
             let tx = invDet * (dirY * relX - dirX * relY), ty = invDet * (-planeY * relX + planeX * relY);
+            
             if(ty > 0.1) {
                 let sx = Math.floor((w/2) * (1 + tx / ty));
                 let sh = Math.abs(Math.floor(h / ty)) * s.sY, sw = Math.abs(Math.floor(h / ty)) * s.sX;
+                
                 if(sx > 0 && sx < w && ty < zBuffer[sx]) {
-                    ctx.fillStyle = s.color || "#e67e22";
-                    ctx.fillRect(sx - sw/2, h/2 - sh/2, sw, sh);
+                    if(s.isSlender) {
+                        ctx.fillStyle = "#111";
+                        ctx.fillRect(sx - sw/2, h/2 - sh/2, sw, sh);
+                    } else {
+                        // DIBUJAR SPRITE PERSONA
+                        if(playerSpriteImg.complete) {
+                            ctx.drawImage(playerSpriteImg, sx - sw/2, h/2 - sh/2, sw, sh);
+                        } else {
+                            ctx.fillStyle = "#e67e22";
+                            ctx.fillRect(sx - sw/2, h/2 - sh/2, sw, sh);
+                        }
+                        
+                        // DIBUJAR NOMBRE ARRIBA (4 dígitos)
+                        ctx.fillStyle = "white";
+                        ctx.font = "bold 14px Arial";
+                        ctx.textAlign = "center";
+                        ctx.fillText(getPlayerName(s.id), sx, h/2 - sh/2 - 10);
+                    }
                 }
             }
         });
@@ -362,4 +375,3 @@
 </script>
 </body>
 </html>
-
